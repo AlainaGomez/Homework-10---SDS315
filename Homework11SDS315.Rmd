@@ -1,0 +1,174 @@
+---
+title: "Homework 10 - SDS315"
+author: "Alaina Gomez (agg3395)"
+date: "2024-04-22"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+    theme: cerulean
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include = FALSE, echo = FALSE}
+redline <- read.csv("/Users/alainagomez/Desktop/redlining.csv")
+groceries <- read.csv("/Users/alainagomez/Desktop/groceries.csv")
+groceries$Type <- trimws(groceries$Type)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+```
+
+[**Link to Github**](https://github.com/AlainaGomez/Homework-10---SDS315)
+
+\newpage
+
+# Problem 1
+
+## Question
+
+The question we are trying to answer is whether there is an association between the number of FAIR policies and the ethnic makeup of a ZIP code, while also adjusting for variables such as fire incidents, age of housing units, and median familial income. The bigger question we wish to explore is whether or not there is evidence of redlining practices in the insurance industry based on factors such as ethnic democraphics.
+
+## Approach
+
+I used a linear regression analysis to answer this question. This analysis allows for me to assess the relationship between a dependent variable (number of FAIR policies) and independent variables (ethnic makeup, fire incidents, housing unit age, and median family income) while controlling for confounding factors. 
+
+## Results
+
+```{r, echo = FALSE}
+model <- lm(policies ~ minority + fire + age + income, data = redline)
+coefficients <- coef(summary(model))
+conf_int <- confint(model)
+intv <- cbind(coefficients, conf_int)
+print(intv)
+```
+
+I did a summary of the linear regression model as described above. This summary found that there is a positive coefficient estimate (0.008359) for the "minority" variable meaning that as the percentage of minority residents increases in a ZIP code, the number of FAIR policies also usually increase. As well as, the p-value associated with the "minority" variable (0.00611) is less than 0.05, indicating that this relationship is statistically sigificant at a 95% confidence level.
+
+## Conclusion
+
+The evidence provided above suggests that ZIP codes with higher levels of minority residents tend to have a higher number of FAIR policies, meaning that they potentially have reduced access to private insurance than non-minority ZIP codes. As ZIP codes with higher numbers of FAIR policies serve as a proxy for limited access to private insurance, it can be concluded that there are potential discriminatory practices in the insurance industry. It can be concluded with 95% confidence that the "minority" variable is between 0.0025 and 0.014, suggesting that the true effect of the minority population percentage on the number of FAIR policies issued per 100 housing units falls within this range. While the analysis does adjust for potential other factors that can influence insurance accessibility, there would need to be more thorough evidence to understand this relationship. Insurance companies can use this information to review their practices and ensure they are not contributing to disparities in insurance access based on demographic factors.
+
+# Problem 2
+
+## Part A
+
+```{r, echo = FALSE}
+price_per_store <- groceries %>%
+                    group_by(Store) %>%
+                    summarise(avg_price = mean(Price))
+
+ggplot(price_per_store, aes(x = avg_price, y = reorder(Store, avg_price))) + geom_bar(stat = "identity", fill = "pink") + labs(x = "Average Price of Products ($)", y = "Store", title = "Average Price of Products Sold at Each Store") + theme_minimal()  
+```
+
+This bar graph represents the relationship between the average price of food products and the different stores they are sold at. Each bar represents the average price of products sold at a specific store. The bars are sorted by average price from lowest to highest.
+
+## Part B
+
+```{r, echo = FALSE}
+stores_per_product <- groceries %>%
+                      group_by(Product) %>%
+                      summarise(num_stores = n_distinct(Store))
+
+ggplot(stores_per_product, aes(x = num_stores, y = reorder(Product, num_stores))) + geom_bar(stat = "identity", fill = "lightblue") + labs(x = "Number of Stores", y = "Product", title = "Number of Stores Selling Each Product") + theme_minimal() + theme(axis.text.y = element_text(size = 5.5))
+```
+
+## Part C
+
+```{r, echo = FALSE}
+model <- lm(Price ~ Product + Type, data = groceries)
+model_sum <- summary(model)
+type <- model_sum$coefficients[grep("^Type", rownames(model_sum$coefficients)), ]
+print(type)
+
+convenience <- groceries[groceries$Type == "Convenience", ]
+normal <- groceries[groceries$Type == "Grocery", ]
+
+bootstrap <- replicate(10000, {
+  convenience_mean <- mean(sample(convenience$Price, replace = TRUE))
+  normal_mean <- mean(sample(normal$Price, replace = TRUE))
+  convenience_mean - normal_mean
+})
+
+lower_bound <- quantile(bootstrap, 0.025, na.rm = TRUE)
+upper_bound <- quantile(bootstrap, 0.975, na.rm = TRUE)
+```
+
+The table above represents summary statistics for the coefficients obtained from the linear regression model for Price versus Product and the Type of store. The coefficients are from only "Type".
+
+```{r, echo = FALSE}
+text1 <- "Compared with ordinary grocery stores, convenience stores charge between $"
+text2 <- round(lower_bound, 2)
+text3 <- " and $"
+text4 <- round(upper_bound, 2)
+text5 <- " more for the same product."
+cat(text1, text2)
+cat(text3, text4, text5)
+```
+
+## Part D
+
+```{r, echo = FALSE}
+model <- lm(Price ~ Product + Store, data = groceries)
+model_sum <- summary(model)
+store <- model_sum$coefficients[grep("^Store", rownames(model_sum$coefficients)), ]
+print(store)
+```
+
+The table above represents summary statistics for the coefficients obtained from the linear regression model for Price versus Product and Store. The coefficients are only from "Store".
+
+```{r, echo = FALSE}
+sorted_store <- sort(store[, "Estimate"])
+lowest_stores <- names(head(sorted_store, 2))
+highest_stores <- names(tail(sorted_store, 2))
+
+text1 <- "Two stores with the lowest prices for the same product:"
+text2 <- "Two stores with the highest prices for the same product:"
+cat(text1, "\n")
+cat(lowest_stores, "\n\n")
+cat(text2, "\n")
+cat(highest_stores, "\n")
+```
+
+## Part E
+
+```{r, echo = FALSE}
+central_market_coeff <- model_sum$coefficients[grep("^StoreCentral Market", rownames(model_sum$coefficients)), ]
+heb_coeff <- model_sum$coefficients[grep("^StoreH-E-B", rownames(model_sum$coefficients)), ]
+
+print("Name, Estimate, Std. Error, t value, Pr(>|t|)")
+cat("Central Market: \n", central_market_coeff, "\n")
+cat("H-E-B: \n", heb_coeff)
+```
+
+Based on these coefficients in the model, Central Market is around -0.5743 and HEB around -0.6459. The difference of their coefficients is close to 0.0725. However, because the standard error for Central Market is 0.17699 and HEB is 0.15204, it can be concluded that these ranges overlap and indicate no true significant difference in the prices. Central Market charges a similar amount to HEB for the same product, or at least not significantly more. The difference between these two stores and other stores is minimal as some stores charge significantly more in dollars than others.
+
+## Part F
+
+```{r, echo = FALSE}
+groceries <- mutate(groceries, Income10k = Income / 10000)
+model <- lm(Price ~ Product + Income10k, data = groceries)
+model_sum <- summary(model)
+income10k_sum <- model_sum$coefficients["Income10k", ]
+
+print("Name, Estimate, Std. Error, t value, Pr(>|t|)")
+cat("Income10k: \n", income10k_sum)
+```
+
+The table above represents summary statistics for the coefficients obtained from the linear regression model for Price versus Product and Store. Based on the negative sign of the Income10k coefficient, it seems that consumers in poorer ZIP codes seem to pay more on average for the same product. This suggests that as income increases, the price of products tend to decrease. Consumers in poorer ZIP codes tend to pay more for the same product, on average, when compared to consumers in wealthier ZIP codes.
+
+```{r, echo = FALSE}
+text1 <- "A one-standard deviation increase in the income of a ZIP code seems to be associated"
+text2 <- "with approximately a 0.014 standard-deviation change in the price that consumers in"
+text3 <- "that ZIP code expect to pay for the same product."
+
+print(text1)
+print(text2)
+print(text3)
+```
+
+This means that for every one-standard deviation increase in the income of a ZIP code, the price of the product tends to decrease by approximately 0.014 standard deviations.
